@@ -16,6 +16,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/fileutil"
 	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/sipeed/picoclaw/pkg/providers/messageutil"
 )
 
 const (
@@ -482,6 +483,9 @@ func readMessages(path string, skip int) ([]providers.Message, error) {
 				lineNum, filepath.Base(path), err)
 			continue
 		}
+		if messageutil.IsTransientAssistantThoughtMessage(msg) {
+			continue
+		}
 		msgs = append(msgs, msg)
 	}
 	if scanner.Err() != nil {
@@ -535,6 +539,10 @@ func (s *JSONLStore) AddFullMessage(
 
 // addMsg is the shared implementation for AddMessage and AddFullMessage.
 func (s *JSONLStore) addMsg(sessionKey string, msg providers.Message) error {
+	if messageutil.IsTransientAssistantThoughtMessage(msg) {
+		return nil
+	}
+
 	l := s.sessionLock(sessionKey)
 	l.Lock()
 	defer l.Unlock()
@@ -684,6 +692,8 @@ func (s *JSONLStore) SetHistory(
 	sessionKey string,
 	history []providers.Message,
 ) error {
+	history = messageutil.FilterInvalidHistoryMessages(history)
+
 	l := s.sessionLock(sessionKey)
 	l.Lock()
 	defer l.Unlock()
@@ -762,6 +772,8 @@ func (s *JSONLStore) Compact(
 func (s *JSONLStore) rewriteJSONL(
 	sessionKey string, msgs []providers.Message,
 ) error {
+	msgs = messageutil.FilterInvalidHistoryMessages(msgs)
+
 	var buf bytes.Buffer
 	for i, msg := range msgs {
 		line, err := json.Marshal(msg)
